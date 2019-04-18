@@ -119,6 +119,7 @@ class Wave():
     UUID_RADON_LT_AVG = UUID("b42e0a4c-ade7-11e4-89d3-123b93f75cba")
 
     def __init__(self, SerialNumber):
+        self.mac_addr          = None
         self.periph            = None
         self.datetime_char     = None
         self.humidity_char     = None
@@ -126,7 +127,7 @@ class Wave():
         self.radon_st_avg_char = None
         self.radon_lt_avg_char = None
 
-    def connect(self):
+    def scan(self):
         scanner     = Scanner().withDelegate(DefaultDelegate())
         deviceFound = False
         searchCount = 0
@@ -146,13 +147,21 @@ class Wave():
             print "GUIDE: (1) Please verify the serial number. (2) Ensure that the device is advertising. (3) Retry connection."
             sys.exit(1)
         else:
-            self.periph = Peripheral(MacAddr)
+            self.mac_addr = MacAddr
+            print "Found Wave Mac address %s" %(MacAddr)
+            
+    def connect(self):
+        try:
+            self.periph = Peripheral(self.mac_addr)
             self.datetime_char     = self.periph.getCharacteristics(uuid=self.UUID_DATETIME)[0]
             self.humidity_char     = self.periph.getCharacteristics(uuid=self.UUID_HUMIDITY)[0]
             self.temperature_char  = self.periph.getCharacteristics(uuid=self.UUID_TEMPERATURE)[0]
             self.radon_st_avg_char = self.periph.getCharacteristics(uuid=self.UUID_RADON_ST_AVG)[0]
             self.radon_lt_avg_char = self.periph.getCharacteristics(uuid=self.UUID_RADON_LT_AVG)[0]
-            
+        except btle.BTLEException as e: 
+            print "Connecting error, retry..."
+            time.sleep(60)
+                                               
     def read(self, sensor_idx):
         if (sensor_idx==SENSOR_IDX_DATETIME and self.datetime_char!=None):
                 rawdata = self.datetime_char.read()
@@ -190,11 +199,10 @@ class Wave():
             self.temperature_char  = None
             self.radon_st_avg_char = None
             self.radon_lt_avg_char = None
-
 try:
     #---- Connect to device ----#
     wave = Wave(SerialNumber)
-    wave.connect()
+    wave.scan()
     
     if (Mode=='terminal'):
         print "\nPress ctrl-C to exit program\n"
@@ -209,7 +217,7 @@ try:
         print header
 
     while True:
-        
+        wave.connect()
         # read current values
         date_time    = wave.read(SENSOR_IDX_DATETIME)
         humidity     = wave.read(SENSOR_IDX_HUMIDITY)
@@ -224,7 +232,8 @@ try:
             print tableprint.row(data, width=20)
         elif (Mode=='pipe'):
             print data
-            
+        
+        wave.disconnect()
         time.sleep(SamplePeriod)
             
 finally:
